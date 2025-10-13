@@ -250,7 +250,6 @@ def listar_todos():
     cursor = col_prod.find({}, {"_id": 0, "_fp": 0}).sort("codigo", ASCENDING)  
     refresh_table(cursor)
 
-
 def buscar():
     filtro = {}
     cat = e_categoria.get().strip()
