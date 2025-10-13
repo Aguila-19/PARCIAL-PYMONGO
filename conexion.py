@@ -15,10 +15,9 @@ try:
     client = get_client()
     db = client["Tienda"]
     col = db["Productos"]
-    # índice único por SKU
-    col.create_index([("sku", ASCENDING)], unique=True)
+    # índice único por código
+    col.create_index([("codigo", ASCENDING)], unique=True)
 except Exception as e:
-    # Si falla aquí, cierra GUI luego de mostrar error
     root = tk.Tk()
     root.withdraw()
     messagebox.showerror("Conexión MongoDB", f"No se pudo conectar:\n{e}")
@@ -35,41 +34,41 @@ def to_number(value, integer=False):
         return None
 
 def clear_form():
-    e_sku.delete(0, tk.END)
+    e_codigo.delete(0, tk.END)
     e_nombre.delete(0, tk.END)
     e_categoria.delete(0, tk.END)
     e_precio.delete(0, tk.END)
-    e_stock.delete(0, tk.END)
+    e_existencia.delete(0, tk.END)
     e_marca.delete(0, tk.END)
 
 def doc_from_form(require_all=False):
-    sku = e_sku.get().strip()
+    codigo = e_codigo.get().strip()
     nombre = e_nombre.get().strip()
     categoria = e_categoria.get().strip()
     precio = to_number(e_precio.get(), integer=False)
-    stock = to_number(e_stock.get(), integer=True)
+    existencia = to_number(e_existencia.get(), integer=True)
     marca = e_marca.get().strip()
 
-    if require_all and (not sku or not nombre):
-        messagebox.showwarning("Validación", "SKU y Nombre son obligatorios.")
+    if require_all and (not codigo or not nombre):
+        messagebox.showwarning("Validación", "Código y Nombre son obligatorios.")
         return None
 
     doc = {}
-    if sku: doc["sku"] = sku
+    if codigo: doc["codigo"] = codigo
     if nombre: doc["nombre"] = nombre
     if categoria: doc["categoria"] = categoria
     if precio is not None: doc["precio"] = precio
-    if stock is not None: doc["stock"] = stock
+    if existencia is not None: doc["existencia"] = existencia
     if marca: doc["marca"] = marca
     return doc
 
 def fill_form(doc):
     clear_form()
-    e_sku.insert(0, doc.get("sku", ""))
+    e_codigo.insert(0, doc.get("codigo", ""))
     e_nombre.insert(0, doc.get("nombre", ""))
     e_categoria.insert(0, doc.get("categoria", ""))
     if "precio" in doc: e_precio.insert(0, str(doc["precio"]))
-    if "stock" in doc: e_stock.insert(0, str(doc["stock"]))
+    if "existencia" in doc: e_existencia.insert(0, str(doc["existencia"]))
     e_marca.insert(0, doc.get("marca", ""))
 
 def refresh_table(docs):
@@ -79,11 +78,11 @@ def refresh_table(docs):
         tree.insert(
             "", tk.END,
             values=(
-                d.get("sku", ""),
+                d.get("codigo", ""),
                 d.get("nombre", ""),
                 d.get("categoria", ""),
                 d.get("precio", ""),
-                d.get("stock", ""),
+                d.get("existencia", ""),
                 d.get("marca", "")
             )
         )
@@ -97,36 +96,36 @@ def insertar():
         messagebox.showinfo("Insertar", "Producto insertado.")
         listar_todos()
     except DuplicateKeyError:
-        messagebox.showerror("Insertar", "SKU duplicado. Usa otro SKU.")
+        messagebox.showerror("Insertar", "Código duplicado. Usa otro código.")
     except PyMongoError as e:
         messagebox.showerror("Insertar", f"Error MongoDB:\n{e}")
 
-def cargar_por_sku():
-    sku = e_sku.get().strip()
-    if not sku:
-        messagebox.showwarning("Cargar", "Ingresa el SKU.")
+def cargar_por_codigo():
+    codigo = e_codigo.get().strip()
+    if not codigo:
+        messagebox.showwarning("Cargar", "Ingresa el código del producto.")
         return
-    doc = col.find_one({"sku": sku}, {"_id": 0})
+    doc = col.find_one({"codigo": codigo}, {"_id": 0})
     if not doc:
-        messagebox.showinfo("Cargar", "No se encontró ese SKU.")
+        messagebox.showinfo("Cargar", "No se encontró ese código.")
         return
     fill_form(doc)
 
 def actualizar():
-    sku = e_sku.get().strip()
-    if not sku:
-        messagebox.showwarning("Actualizar", "Coloca el SKU a actualizar.")
+    codigo = e_codigo.get().strip()
+    if not codigo:
+        messagebox.showwarning("Actualizar", "Coloca el código a actualizar.")
         return
     nuevos = doc_from_form(require_all=False)
-    if not nuevos or len(nuevos) == 1:  # sólo trae SKU
+    if not nuevos or len(nuevos) == 1:
         messagebox.showwarning("Actualizar", "Ingresa al menos un campo a cambiar.")
         return
     try:
-        res = col.update_one({"sku": sku}, {"$set": {k: v for k, v in nuevos.items() if k != "sku"}})
+        res = col.update_one({"codigo": codigo}, {"$set": {k: v for k, v in nuevos.items() if k != "codigo"}})
         if res.matched_count == 0:
-            messagebox.showinfo("Actualizar", "No se encontró ese SKU.")
+            messagebox.showinfo("Actualizar", "No se encontró ese código.")
         elif res.modified_count == 0:
-            messagebox.showinfo("Actualizar", "No hubo cambios (mismos valores).")
+            messagebox.showinfo("Actualizar", "No hubo cambios.")
         else:
             messagebox.showinfo("Actualizar", "Producto actualizado.")
         listar_todos()
@@ -134,13 +133,13 @@ def actualizar():
         messagebox.showerror("Actualizar", f"Error MongoDB:\n{e}")
 
 def eliminar():
-    sku = e_sku.get().strip()
-    if not sku:
-        messagebox.showwarning("Eliminar", "Coloca el SKU a eliminar.")
+    codigo = e_codigo.get().strip()
+    if not codigo:
+        messagebox.showwarning("Eliminar", "Coloca el código a eliminar.")
         return
-    if messagebox.askyesno("Eliminar", f"¿Eliminar el SKU '{sku}'?"):
+    if messagebox.askyesno("Eliminar", f"¿Eliminar el código '{codigo}'?"):
         try:
-            res = col.delete_one({"sku": sku})
+            res = col.delete_one({"codigo": codigo})
             messagebox.showinfo("Eliminar", f"Eliminados: {res.deleted_count}")
             listar_todos()
         except PyMongoError as e:
@@ -151,7 +150,6 @@ def listar_todos():
     refresh_table(cursor)
 
 def buscar():
-    # Filtros simples: categoría y texto en nombre, + rango de precio opcional
     filtro = {}
     cat = e_categoria.get().strip()
     if cat:
@@ -175,14 +173,14 @@ def on_tree_double_click(event):
     if not item: return
     vals = tree.item(item, "values")
     doc = {
-        "sku": vals[0], "nombre": vals[1], "categoria": vals[2],
+        "codigo": vals[0], "nombre": vals[1], "categoria": vals[2],
         "precio": to_number(vals[3] if vals[3] != "" else None),
-        "stock": to_number(vals[4] if vals[4] != "" else None, integer=True),
+        "existencia": to_number(vals[4] if vals[4] != "" else None, integer=True),
         "marca": vals[5]
     }
     fill_form(doc)
 
-# ---------- Interfaz (Tkinter) ----------
+# ---------- Interfaz ----------
 root = tk.Tk()
 root.title("Tienda - CRUD (MongoDB)")
 
@@ -192,8 +190,8 @@ root.columnconfigure(0, weight=1)
 root.rowconfigure(0, weight=1)
 
 # Formulario
-ttk.Label(frm, text="SKU*").grid(row=0, column=0, sticky="w")
-e_sku = ttk.Entry(frm, width=24); e_sku.grid(row=0, column=1, padx=5, pady=3)
+ttk.Label(frm, text="Código de producto*").grid(row=0, column=0, sticky="w")
+e_codigo = ttk.Entry(frm, width=24); e_codigo.grid(row=0, column=1, padx=5, pady=3)
 
 ttk.Label(frm, text="Nombre*").grid(row=0, column=2, sticky="w")
 e_nombre = ttk.Entry(frm, width=24); e_nombre.grid(row=0, column=3, padx=5, pady=3)
@@ -204,23 +202,23 @@ e_categoria = ttk.Entry(frm, width=24); e_categoria.grid(row=1, column=1, padx=5
 ttk.Label(frm, text="Precio").grid(row=1, column=2, sticky="w")
 e_precio = ttk.Entry(frm, width=24); e_precio.grid(row=1, column=3, padx=5, pady=3)
 
-ttk.Label(frm, text="Stock").grid(row=2, column=0, sticky="w")
-e_stock = ttk.Entry(frm, width=24); e_stock.grid(row=2, column=1, padx=5, pady=3)
+ttk.Label(frm, text="En existencia").grid(row=2, column=0, sticky="w")
+e_existencia = ttk.Entry(frm, width=24); e_existencia.grid(row=2, column=1, padx=5, pady=3)
 
 ttk.Label(frm, text="Marca").grid(row=2, column=2, sticky="w")
 e_marca = ttk.Entry(frm, width=24); e_marca.grid(row=2, column=3, padx=5, pady=3)
 
-# Rango de precio para búsquedas
-ttk.Label(frm, text="P. mín").grid(row=3, column=0, sticky="w")
+# Rango de precio
+ttk.Label(frm, text="Precio mínimo").grid(row=3, column=0, sticky="w")
 e_precio_min = ttk.Entry(frm, width=24); e_precio_min.grid(row=3, column=1, padx=5, pady=3)
-ttk.Label(frm, text="P. máx").grid(row=3, column=2, sticky="w")
+ttk.Label(frm, text="Precio máximo").grid(row=3, column=2, sticky="w")
 e_precio_max = ttk.Entry(frm, width=24); e_precio_max.grid(row=3, column=3, padx=5, pady=3)
 
 # Botones
 btns = ttk.Frame(frm)
 btns.grid(row=4, column=0, columnspan=4, pady=(8, 10))
 ttk.Button(btns, text="Insertar", command=insertar).grid(row=0, column=0, padx=5)
-ttk.Button(btns, text="Cargar por SKU", command=cargar_por_sku).grid(row=0, column=1, padx=5)
+ttk.Button(btns, text="Cargar por código", command=cargar_por_codigo).grid(row=0, column=1, padx=5)
 ttk.Button(btns, text="Actualizar", command=actualizar).grid(row=0, column=2, padx=5)
 ttk.Button(btns, text="Eliminar", command=eliminar).grid(row=0, column=3, padx=5)
 ttk.Button(btns, text="Buscar/Filtrar", command=buscar).grid(row=0, column=4, padx=5)
@@ -228,10 +226,11 @@ ttk.Button(btns, text="Listar todos", command=listar_todos).grid(row=0, column=5
 ttk.Button(btns, text="Limpiar formulario", command=clear_form).grid(row=0, column=6, padx=5)
 
 # Tabla
-cols = ("sku", "nombre", "categoria", "precio", "stock", "marca")
+cols = ("codigo", "nombre", "categoria", "precio", "existencia", "marca")
 tree = ttk.Treeview(frm, columns=cols, show="headings", height=12)
 for c in cols:
-    tree.heading(c, text=c.capitalize())
+    encabezado = "Código" if c == "codigo" else "En existencia" if c == "existencia" else c.capitalize()
+    tree.heading(c, text=encabezado)
     tree.column(c, width=120, anchor="w")
 tree.grid(row=5, column=0, columnspan=4, sticky="nsew")
 frm.rowconfigure(5, weight=1)
@@ -243,7 +242,6 @@ ys.grid(row=5, column=4, sticky="ns")
 
 tree.bind("<Double-1>", on_tree_double_click)
 
-# Carga inicial
 listar_todos()
 
 root.mainloop()
