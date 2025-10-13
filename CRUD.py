@@ -1,8 +1,3 @@
-# GUI CRUD + LOGIN (Tkinter + PyMongo + bcrypt) con "duplicado solo si es igual"
-# BD: Tienda | Cols: Usuarios, Productos
-# Campos del producto: codigo, nombre, categoria, precio, existencia, marca
-# Único por huella (_fp) calculada con (codigo, nombre, categoria, precio, existencia, marca)
-
 import os
 import json
 import hashlib
@@ -12,7 +7,7 @@ from pymongo import MongoClient, ASCENDING
 from pymongo.errors import DuplicateKeyError, PyMongoError
 import bcrypt
 
-# ---------------- Conexión ----------------
+#Conexión 
 def get_client():
     uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
     client = MongoClient(uri, serverSelectionTimeoutMS=4000)
@@ -25,27 +20,22 @@ col_users = None
 col_prod = None
 
 def conectar():
-    """Conecta y asegura índices según la política de duplicados."""
+    """Conecta y se asegura de los índices según la política de duplicados."""
     global client, db, col_users, col_prod
     client = get_client()
     db = client["Tienda"]
     col_users = db["Usuarios"]
     col_prod = db["Productos"]
 
-    # Índices de usuarios
     col_users.create_index([("username", ASCENDING)], unique=True)
 
-    # --- Política de unicidad para Productos ---
-    # 1) Intentar borrar índice único antiguo en 'codigo' si existiera
     try:
         col_prod.drop_index("codigo_1")
     except Exception:
         pass
 
-    # 2) Índice único por huella (_fp) => duplicado solo si todos los campos son idénticos
-    col_prod.create_index([("_fp", ASCENDING)], unique=True)
+col_prod.create_index([("_fp", ASCENDING)], unique=True)
 
-# ---------------- Utilidades de hashing/huella ----------------
 def producto_fingerprint(doc: dict) -> str:
     """Huella estable: si estos campos son idénticos, es duplicado."""
     keys = ["codigo", "nombre", "categoria", "precio", "existencia", "marca"]
@@ -53,7 +43,6 @@ def producto_fingerprint(doc: dict) -> str:
     s = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return hashlib.sha1(s.encode("utf-8")).hexdigest()
 
-# ---------------- Utilidades de usuarios ----------------
 def hash_password(pw: str) -> bytes:
     return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt())
 
@@ -61,12 +50,10 @@ def check_password(pw: str, hashed: bytes) -> bool:
     return bcrypt.checkpw(pw.encode("utf-8"), hashed)
 
 def ensure_admin():
-    """Si no hay usuarios, pide crear el primero (admin)."""
     if col_users.count_documents({}) == 0:
         messagebox.showinfo("Usuarios", "No existen usuarios. Crea el primer usuario (admin).")
         open_register_window(initial_admin=True)
 
-# ---------------- Ventana de Registro ----------------
 def open_register_window(initial_admin=False):
     reg = tk.Toplevel()
     reg.title("Registrar usuario")
@@ -101,7 +88,7 @@ def open_register_window(initial_admin=False):
 
     ttk.Button(reg, text="Registrar", command=registrar).grid(row=3, column=0, columnspan=2, pady=10)
 
-# ---------------- Ventana de Login ----------------
+
 def open_login_window(on_success):
     lw = tk.Toplevel()
     lw.title("Login - Tienda")
@@ -132,7 +119,7 @@ def open_login_window(on_success):
     ttk.Button(lw, text="Ingresar", command=do_login).grid(row=2, column=0, padx=8, pady=10)
     ttk.Button(lw, text="Registrar nuevo", command=lambda: open_register_window(False)).grid(row=2, column=1, padx=8, pady=10)
 
-# ---------------- Utilidades CRUD ----------------
+
 def to_number(value, integer=False):
     v = str(value).strip()
     if v == "":
@@ -185,16 +172,12 @@ def refresh_table(docs):
         tree.delete(row)
     for d in docs:
         tree.insert("", tk.END, values=(
-            d.get("codigo", ""), d.get("nombre", ""), d.get("categoria", ""),
-            d.get("precio", ""), d.get("existencia", ""), d.get("marca", "")
-        ))
+d.get("codigo", ""), d.get("nombre", ""), d.get("categoria", ""), d.get("precio", ""), d.get("existencia", ""), d.get("marca", "")))
 
-# ---------------- Acciones CRUD ----------------
 def insertar():
     doc = doc_from_form(require_all=True)
     if not doc: return
     try:
-        # huella antes de insertar (duplicado solo si todo igual)
         doc["_fp"] = producto_fingerprint(doc)
         col_prod.insert_one(doc)
         messagebox.showinfo("Insertar", "Producto insertado.")
@@ -227,15 +210,12 @@ def actualizar():
         return
 
     try:
-        # Obtenemos un documento que coincida con ese código para recálculo
         actual = col_prod.find_one({"codigo": codigo}, {"_id": 0})
         if not actual:
             messagebox.showinfo("Actualizar", "No se encontró ese código.")
             return
 
         mezcla = {**actual, **{k: v for k, v in nuevos.items() if k != "codigo"}}
-
-        # Si cambian campos que definen la huella, recalcúlala
         claves = {"codigo", "nombre", "categoria", "precio", "existencia", "marca"}
         if any(k in claves for k in nuevos.keys()):
             nuevos["_fp"] = producto_fingerprint(mezcla)
@@ -267,8 +247,9 @@ def eliminar():
             messagebox.showerror("Eliminar", f"Error MongoDB:\n{e}")
 
 def listar_todos():
-    cursor = col_prod.find({}, {"_id": 0, "_fp": 0}).sort("nombre", ASCENDING)
+    cursor = col_prod.find({}, {"_id": 0, "_fp": 0}).sort("codigo", ASCENDING)  
     refresh_table(cursor)
+
 
 def buscar():
     filtro = {}
@@ -298,10 +279,9 @@ def on_tree_double_click(event):
     }
     fill_form(doc)
 
-# ---------------- UI principal (se crea tras login) ----------------
 root = tk.Tk()
 root.title("Login requerido…")
-root.withdraw()  # oculto hasta loguear
+root.withdraw() 
 
 def launch_app(user_info):
     root.deiconify()
@@ -330,14 +310,12 @@ def launch_app(user_info):
     ttk.Label(frm, text="Marca").grid(row=2, column=2, sticky="w")
     e_marca = ttk.Entry(frm, width=24); e_marca.grid(row=2, column=3, padx=5, pady=3)
 
-    # Rango de precio para búsquedas
     ttk.Label(frm, text="Precio mínimo").grid(row=3, column=0, sticky="w")
     global e_precio_min, e_precio_max
     e_precio_min = ttk.Entry(frm, width=24); e_precio_min.grid(row=3, column=1, padx=5, pady=3)
     ttk.Label(frm, text="Precio máximo").grid(row=3, column=2, sticky="w")
     e_precio_max = ttk.Entry(frm, width=24); e_precio_max.grid(row=3, column=3, padx=5, pady=3)
 
-    # Botones
     btns = ttk.Frame(frm); btns.grid(row=4, column=0, columnspan=4, pady=(8, 10))
     ttk.Button(btns, text="Insertar", command=insertar).grid(row=0, column=0, padx=5)
     ttk.Button(btns, text="Cargar por código", command=cargar_por_codigo).grid(row=0, column=1, padx=5)
@@ -347,7 +325,6 @@ def launch_app(user_info):
     ttk.Button(btns, text="Listar todos", command=listar_todos).grid(row=0, column=5, padx=5)
     ttk.Button(btns, text="Limpiar formulario", command=clear_form).grid(row=0, column=6, padx=5)
 
-    # Tabla
     cols = ("codigo", "nombre", "categoria", "precio", "existencia", "marca")
     global tree
     tree = ttk.Treeview(frm, columns=cols, show="headings", height=12)
@@ -361,10 +338,8 @@ def launch_app(user_info):
     ys = ttk.Scrollbar(frm, orient="vertical", command=tree.yview)
     tree.configure(yscroll=ys.set); ys.grid(row=5, column=4, sticky="ns")
     tree.bind("<Double-1>", on_tree_double_click)
-
     listar_todos()
 
-# ---------------- Arranque ----------------
 if __name__ == "__main__":
     try:
         conectar()
@@ -373,7 +348,6 @@ if __name__ == "__main__":
         messagebox.showerror("MongoDB", f"No se pudo conectar:\n{e}")
         raise SystemExit
 
-    # Ventana raíz oculta mientras gestionamos usuarios
     hidden = tk.Tk()
     hidden.withdraw()
     ensure_admin()
