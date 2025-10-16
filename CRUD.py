@@ -7,7 +7,103 @@ from pymongo import MongoClient, ASCENDING
 from pymongo.errors import DuplicateKeyError, PyMongoError
 import bcrypt
 
-#Conexión 
+# ==================== PALETA Y ESTILOS ====================
+COLORS = {
+    "BG": "#0f172a",           # fondo general (slate-900)
+    "SURFACE": "#111827",      # paneles (gray-900)
+    "CARD": "#1f2937",         # tarjetas / frames (gray-800)
+    "BORDER": "#334155",       # bordes (slate-600)
+    "TEXT": "#e5e7eb",         # texto base (gray-200)
+    "MUTED": "#9ca3af",        # texto tenue
+    "ACCENT": "#3b82f6",       # azul principal
+    "ACCENT_D": "#1d4ed8",     # azul oscuro (hover)
+    "SUCCESS": "#10b981",      # verde (selección tabla)
+    "ROW_EVEN": "#0b1224",     # zebra par
+    "ROW_ODD": "#0e152b",      # zebra impar
+    "HEADER": "#0b1224",       # encabezado tabla
+}
+
+def setup_styles(root):
+    style = ttk.Style(root)
+    # Tema que permite colorear elementos
+    try:
+        style.theme_use("clam")
+    except Exception:
+        pass
+
+    # Colores de fondo por defecto
+    style.configure(".", background=COLORS["BG"], foreground=COLORS["TEXT"])
+
+    # Frames / contenedores
+    style.configure("TFrame", background=COLORS["BG"])
+    style.configure("Card.TFrame", background=COLORS["CARD"], bordercolor=COLORS["BORDER"], relief="flat")
+    style.configure("TLabelframe", background=COLORS["CARD"], bordercolor=COLORS["BORDER"])
+    style.configure("TLabelframe.Label", background=COLORS["CARD"], foreground=COLORS["TEXT"])
+
+    # Labels
+    style.configure("TLabel", background=COLORS["BG"], foreground=COLORS["TEXT"])
+
+    # Entradas y Combobox
+    field_style = {
+        "fieldbackground": COLORS["SURFACE"],
+        "foreground": COLORS["TEXT"],
+        "insertcolor": COLORS["TEXT"],
+        "bordercolor": COLORS["BORDER"],
+        "lightcolor": COLORS["BORDER"],
+        "darkcolor": COLORS["BORDER"],
+        "padding": 6,
+    }
+    style.configure("TEntry", **field_style)
+    style.configure("TCombobox", **field_style)
+    style.map("TCombobox",
+              fieldbackground=[("active", COLORS["SURFACE"])],
+              foreground=[("active", COLORS["TEXT"])])
+
+    # Botones
+    style.configure("TButton",
+                    background=COLORS["ACCENT"],
+                    foreground="#ffffff",
+                    bordercolor=COLORS["ACCENT_D"],
+                    focusthickness=3,
+                    focuscolor=COLORS["ACCENT_D"],
+                    padding=(10, 6))
+    style.map("TButton",
+              background=[("active", COLORS["ACCENT_D"]), ("pressed", COLORS["ACCENT_D"])],
+              foreground=[("disabled", COLORS["MUTED"])])
+
+    # Scrollbar
+    style.configure("Vertical.TScrollbar", background=COLORS["CARD"], troughcolor=COLORS["SURFACE"],
+                    bordercolor=COLORS["BORDER"], arrowcolor=COLORS["TEXT"])
+
+    # Treeview (tabla)
+    style.configure("Treeview",
+                    background=COLORS["ROW_EVEN"],
+                    fieldbackground=COLORS["ROW_EVEN"],
+                    foreground=COLORS["TEXT"],
+                    bordercolor=COLORS["BORDER"],
+                    rowheight=26)
+    style.map("Treeview",
+              background=[("selected", COLORS["SUCCESS"])],
+              foreground=[("selected", "#0b1224")])
+
+    style.configure("Treeview.Heading",
+                    background=COLORS["HEADER"],
+                    foreground=COLORS["TEXT"],
+                    relief="flat",
+                    bordercolor=COLORS["BORDER"],
+                    padding=(6, 8))
+    style.map("Treeview.Heading",
+              background=[("active", COLORS["HEADER"])])
+
+def prettify_window(win, title=None):
+    try:
+        win.configure(bg=COLORS["BG"])
+    except Exception:
+        pass
+    if title:
+        win.title(title)
+
+# ==================== CONEXIÓN ====================
 def get_client():
     uri = os.getenv("MONGODB_URI", "mongodb://localhost:27017/")
     client = MongoClient(uri, serverSelectionTimeoutMS=4000)
@@ -33,8 +129,7 @@ def conectar():
         col_prod.drop_index("codigo_1")
     except Exception:
         pass
-
-col_prod.create_index([("_fp", ASCENDING)], unique=True)
+    col_prod.create_index([("_fp", ASCENDING)], unique=True, name="_fp_1")
 
 def producto_fingerprint(doc: dict) -> str:
     """Huella estable: si estos campos son idénticos, es duplicado."""
@@ -56,7 +151,7 @@ def ensure_admin():
 
 def open_register_window(initial_admin=False):
     reg = tk.Toplevel()
-    reg.title("Registrar usuario")
+    prettify_window(reg, "Registrar usuario")
     reg.grab_set()
 
     ttk.Label(reg, text="Usuario *").grid(row=0, column=0, sticky="w", padx=8, pady=6)
@@ -88,10 +183,9 @@ def open_register_window(initial_admin=False):
 
     ttk.Button(reg, text="Registrar", command=registrar).grid(row=3, column=0, columnspan=2, pady=10)
 
-
 def open_login_window(on_success):
     lw = tk.Toplevel()
-    lw.title("Login - Tienda")
+    prettify_window(lw, "Login - Tienda")
     lw.grab_set()
 
     ttk.Label(lw, text="Usuario").grid(row=0, column=0, sticky="w", padx=8, pady=6)
@@ -118,7 +212,6 @@ def open_login_window(on_success):
 
     ttk.Button(lw, text="Ingresar", command=do_login).grid(row=2, column=0, padx=8, pady=10)
     ttk.Button(lw, text="Registrar nuevo", command=lambda: open_register_window(False)).grid(row=2, column=1, padx=8, pady=10)
-
 
 def to_number(value, integer=False):
     v = str(value).strip()
@@ -170,9 +263,12 @@ def fill_form(doc):
 def refresh_table(docs):
     for row in tree.get_children():
         tree.delete(row)
-    for d in docs:
+    for i, d in enumerate(docs):
+        tag = "odd" if i % 2 else "even"
         tree.insert("", tk.END, values=(
-d.get("codigo", ""), d.get("nombre", ""), d.get("categoria", ""), d.get("precio", ""), d.get("existencia", ""), d.get("marca", "")))
+            d.get("codigo", ""), d.get("nombre", ""), d.get("categoria", ""),
+            d.get("precio", ""), d.get("existencia", ""), d.get("marca", "")
+        ), tags=(tag,))
 
 def insertar():
     doc = doc_from_form(require_all=True)
@@ -247,7 +343,7 @@ def eliminar():
             messagebox.showerror("Eliminar", f"Error MongoDB:\n{e}")
 
 def listar_todos():
-    cursor = col_prod.find({}, {"_id": 0, "_fp": 0}).sort("codigo", ASCENDING)  
+    cursor = col_prod.find({}, {"_id": 0, "_fp": 0}).sort("codigo", ASCENDING)
     refresh_table(cursor)
 
 def buscar():
@@ -279,14 +375,14 @@ def on_tree_double_click(event):
     fill_form(doc)
 
 root = tk.Tk()
-root.title("Login requerido…")
-root.withdraw() 
+prettify_window(root, "Login requerido…")
+root.withdraw()
 
 def launch_app(user_info):
     root.deiconify()
     root.title(f"Tienda - CRUD (Usuario: {user_info.get('username')} | Rol: {user_info.get('role','-')})")
 
-    frm = ttk.Frame(root, padding=10); frm.grid(row=0, column=0, sticky="nsew")
+    frm = ttk.Frame(root, padding=10, style="TFrame"); frm.grid(row=0, column=0, sticky="nsew")
     root.columnconfigure(0, weight=1); root.rowconfigure(0, weight=1)
 
     # Formulario
@@ -315,7 +411,7 @@ def launch_app(user_info):
     ttk.Label(frm, text="Precio máximo").grid(row=3, column=2, sticky="w")
     e_precio_max = ttk.Entry(frm, width=24); e_precio_max.grid(row=3, column=3, padx=5, pady=3)
 
-    btns = ttk.Frame(frm); btns.grid(row=4, column=0, columnspan=4, pady=(8, 10))
+    btns = ttk.Frame(frm, style="TFrame"); btns.grid(row=4, column=0, columnspan=4, pady=(8, 10))
     ttk.Button(btns, text="Insertar", command=insertar).grid(row=0, column=0, padx=5)
     ttk.Button(btns, text="Cargar por código", command=cargar_por_codigo).grid(row=0, column=1, padx=5)
     ttk.Button(btns, text="Actualizar", command=actualizar).grid(row=0, column=2, padx=5)
@@ -334,12 +430,19 @@ def launch_app(user_info):
     tree.grid(row=5, column=0, columnspan=4, sticky="nsew")
     frm.rowconfigure(5, weight=1); frm.columnconfigure(3, weight=1)
 
-    ys = ttk.Scrollbar(frm, orient="vertical", command=tree.yview)
+    ys = ttk.Scrollbar(frm, orient="vertical", command=tree.yview, style="Vertical.TScrollbar")
     tree.configure(yscroll=ys.set); ys.grid(row=5, column=4, sticky="ns")
     tree.bind("<Double-1>", on_tree_double_click)
+
+    # Colores zebra por tags
+    tree.tag_configure("even", background=COLORS["ROW_EVEN"])
+    tree.tag_configure("odd", background=COLORS["ROW_ODD"])
     listar_todos()
 
 if __name__ == "__main__":
+    # Estilos antes de crear ventanas hijas
+    setup_styles(root)
+
     try:
         conectar()
     except Exception as e:
@@ -348,6 +451,7 @@ if __name__ == "__main__":
         raise SystemExit
 
     hidden = tk.Tk()
+    prettify_window(hidden)
     hidden.withdraw()
     ensure_admin()
     open_login_window(launch_app)
